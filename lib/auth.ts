@@ -1,9 +1,19 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@/db"; // your drizzle instance
+import { nextCookies } from "better-auth/next-js";
+import { db } from "@/db";
+import * as schema from "@/db/schema";
 
 export const auth = betterAuth({
-    database: drizzleAdapter(db, {
-        provider: "pg", // or "mysql", "sqlite"
-    }),
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema,
+  }),
+  emailAndPassword: {
+    enabled: true,
+    // Only the couple has accounts; they're created via `npm run admin:create`.
+    disableSignUp: true,
+  },
+  // nextCookies must stay last so it can flush Set-Cookie from server actions.
+  plugins: [nextCookies()],
 });

@@ -1,5 +1,12 @@
 import { defineRelations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  index,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -73,12 +80,44 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+/** One invite per family — `token` is the public link, `respondedAt` locks the RSVP. */
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    token: text("token").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    message: text("message"),
+    respondedAt: timestamp("responded_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("invites_createdBy_idx").on(table.createdBy)],
+);
+
+/** Main guest + companions, one row each. */
+export const guests = pgTable(
+  "guests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inviteId: uuid("invite_id")
+      .notNull()
+      .references(() => invites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    isMain: boolean("is_main").default(false).notNull(),
+    attending: boolean("attending").default(false).notNull(),
+  },
+  (table) => [index("guests_inviteId_idx").on(table.inviteId)],
+);
+
 export const relations = defineRelations(
-  { user, session, account, verification },
+  { user, session, account, verification, invites, guests },
   (r) => ({
     user: {
       sessions: r.many.session(),
       accounts: r.many.account(),
+      invites: r.many.invites(),
     },
     session: {
       user: r.one.user({
@@ -91,6 +130,21 @@ export const relations = defineRelations(
       user: r.one.user({
         from: r.account.userId,
         to: r.user.id,
+        optional: false,
+      }),
+    },
+    invites: {
+      guests: r.many.guests(),
+      createdByUser: r.one.user({
+        from: r.invites.createdBy,
+        to: r.user.id,
+        optional: false,
+      }),
+    },
+    guests: {
+      invite: r.one.invites({
+        from: r.guests.inviteId,
+        to: r.invites.id,
         optional: false,
       }),
     },
