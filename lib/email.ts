@@ -81,3 +81,63 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+/**
+ * Avisa os noivos que uma contribuição foi confirmada. Como a de RSVP, nunca
+ * lança: o webhook já gravou o pagamento e um email falhando não pode virar um
+ * 500 que faça o Mercado Pago retentar a notificação.
+ */
+export async function sendGiftNotification(params: {
+  giftName: string;
+  donorName: string;
+  amount: string;
+  message: string | null;
+}) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.ADMIN_EMAIL;
+  const from = process.env.RESEND_FROM || "Convites <onboarding@resend.dev>";
+
+  if (!apiKey || !to) {
+    console.warn(
+      "[email] RESEND_API_KEY ou ADMIN_EMAIL ausente — pulando aviso de presente.",
+    );
+    return;
+  }
+
+  const adminUrl = `${process.env.BETTER_AUTH_URL || "http://localhost:3000"}/admin/presentes`;
+  const resend = new Resend(apiKey);
+  const recipients = to
+    .split(",")
+    .map((address) => address.trim())
+    .filter(Boolean);
+
+  const email = {
+    from,
+    subject: `🎁 ${params.donorName} contribuiu com ${params.amount}`,
+    html: `
+      <h2>${escapeHtml(params.donorName)} presenteou vocês!</h2>
+      <p><strong>${escapeHtml(params.amount)}</strong> para <strong>${escapeHtml(params.giftName)}</strong>.</p>
+      ${params.message ? `<blockquote>${escapeHtml(params.message)}</blockquote>` : ""}
+      <p><a href="${adminUrl}">Ver no painel</a></p>
+    `,
+  };
+
+  await Promise.all(
+    recipients.map(async (recipient) => {
+      try {
+        const { error } = await resend.emails.send({
+          ...email,
+          to: [recipient],
+        });
+        if (error) {
+          console.error(
+            `[email] Falha ao enviar para ${recipient}:`,
+            error.message,
+          );
+        }
+      } catch (error) {
+        console.error(`[email] Falha ao enviar para ${recipient}:`, error);
+      }
+    }),
+  );
+}

@@ -32,6 +32,12 @@ export default async function AdminPage({
         <h1 className="font-serif text-3xl">Painel</h1>
         <div className="flex items-center gap-2">
           <Link
+            href="/admin/presentes"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:text-accent"
+          >
+            Presentes
+          </Link>
+          <Link
             href="/admin/novo"
             className="rounded-lg bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >

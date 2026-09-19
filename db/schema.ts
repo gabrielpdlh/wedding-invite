@@ -6,6 +6,8 @@ import {
   boolean,
   index,
   uuid,
+  integer,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -111,8 +113,113 @@ export const guests = pgTable(
   (table) => [index("guests_inviteId_idx").on(table.inviteId)],
 );
 
+/**
+ * Um presente da vaquinha. O valor arrecadado NÃO mora aqui: é sempre a soma das
+ * `contributions` pagas, para não existir a possibilidade de um total denormalizado
+ * divergir das linhas que o compõem.
+ */
+export const gifts = pgTable(
+  "gifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    imageUrl: text("image_url"),
+    targetCents: integer("target_cents").notNull(),
+    /** Valor de uma cota: o convidado escolhe 1, 2, 3… ou digita um valor livre. */
+    shareCents: integer("share_cents").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("gifts_active_idx").on(table.active, table.sortOrder)],
+);
+
+export type ContributionStatus =
+  | "pending"
+  | "paid"
+  | "expired"
+  | "refunded"
+  | "failed";
+
+export type ContributionMethod = "pix" | "card";
+
+/**
+ * Uma tentativa de doação. Nasce `pending`; só o webhook do Mercado Pago promove
+ * a `paid` — o retorno do navegador nunca credita nada.
+ */
+export const contributions = pgTable(
+  "contributions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // `restrict`, não `cascade`: apagar um presente não pode levar junto o
+    // registro de dinheiro que entrou. O admin arquiva em vez de apagar.
+    giftId: uuid("gift_id")
+      .notNull()
+      .references(() => gifts.id, { onDelete: "restrict" }),
+    donorName: text("donor_name").notNull(),
+    donorEmail: text("donor_email"),
+    message: text("message"),
+    amountCents: integer("amount_cents").notNull(),
+    method: text("method").$type<ContributionMethod>().notNull(),
+    status: text("status")
+      .$type<ContributionStatus>()
+      .default("pending")
+      .notNull(),
+    /** id da order (Pix) ou da preference (cartão) no Mercado Pago. */
+    providerRef: text("provider_ref"),
+    providerStatus: text("provider_status"),
+    pixQrCode: text("pix_qr_code"),
+    pixQrCodeBase64: text("pix_qr_code_base64"),
+    expiresAt: timestamp("expires_at"),
+    paidAt: timestamp("paid_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("contributions_giftId_idx").on(table.giftId),
+    index("contributions_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Log cru de todo webhook recebido, válido ou não. São poucas linhas de schema e
+ * é o que responde "paguei e não apareceu" sem depender de log de servidor.
+ */
+export const paymentEvents = pgTable(
+  "payment_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    topic: text("topic").notNull(),
+    resourceId: text("resource_id"),
+    action: text("action"),
+    signatureOk: boolean("signature_ok").notNull(),
+    /** Por que foi ignorado, ou a divergência encontrada. Null = processado sem ressalva. */
+    note: text("note"),
+    contributionId: uuid("contribution_id").references(() => contributions.id, {
+      onDelete: "set null",
+    }),
+    payload: jsonb("payload"),
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("payment_events_contributionId_idx").on(table.contributionId),
+    index("payment_events_receivedAt_idx").on(table.receivedAt),
+  ],
+);
+
 export const relations = defineRelations(
-  { user, session, account, verification, invites, guests },
+  {
+    user,
+    session,
+    account,
+    verification,
+    invites,
+    guests,
+    gifts,
+    contributions,
+    paymentEvents,
+  },
   (r) => ({
     user: {
       sessions: r.many.session(),
@@ -146,6 +253,23 @@ export const relations = defineRelations(
         from: r.guests.inviteId,
         to: r.invites.id,
         optional: false,
+      }),
+    },
+    gifts: {
+      contributions: r.many.contributions(),
+    },
+    contributions: {
+      gift: r.one.gifts({
+        from: r.contributions.giftId,
+        to: r.gifts.id,
+        optional: false,
+      }),
+      events: r.many.paymentEvents(),
+    },
+    paymentEvents: {
+      contribution: r.one.contributions({
+        from: r.paymentEvents.contributionId,
+        to: r.contributions.id,
       }),
     },
   }),

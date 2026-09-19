@@ -12,8 +12,15 @@ export default function Home() {
         confirmar sua presença.
       </p>
       <Link
+        href="/presentes"
+        className="mx-auto mt-8 inline-block rounded-xl bg-accent-deep px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Lista de presentes
+      </Link>
+
+      <Link
         href="/admin"
-        className="mt-8 text-xs text-muted underline underline-offset-4 hover:text-accent"
+        className="mt-6 text-xs text-muted underline underline-offset-4 hover:text-accent"
       >
         Área dos noivos
       </Link>
