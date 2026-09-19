@@ -7,6 +7,7 @@ import { ProgressBar } from "@/app/presentes/progress";
 import type { ContributionStatus } from "@/db/schema";
 import { GiftForm } from "./gift-form";
 import { GiftEditForm } from "./edit-form";
+import { ReconcileButton } from "./reconcile-button";
 import { deleteGift, toggleGift } from "./actions";
 
 export default async function AdminGiftsPage({
@@ -16,7 +17,8 @@ export default async function AdminGiftsPage({
 }) {
   await requireAdmin();
   const { tab } = await searchParams;
-  const showContributions = tab === "contribuicoes";
+  const view =
+    tab === "contribuicoes" || tab === "webhooks" ? tab : "presentes";
 
   const gifts = await listGiftsWithProgress({ includeInactive: true });
   const contributions = await db.query.contributions.findMany({
@@ -24,6 +26,14 @@ export default async function AdminGiftsPage({
     orderBy: { createdAt: "desc" },
     limit: 200,
   });
+
+  // Log cru dos webhooks: é o que responde "paguei e não apareceu" sem precisar
+  // de acesso ao banco nem aos logs da Vercel.
+  const eventos = await db.query.paymentEvents.findMany({
+    orderBy: { receivedAt: "desc" },
+    limit: 50,
+  });
+  const rejeitados = eventos.filter((e) => !e.signatureOk).length;
 
   const paid = contributions.filter((row) => row.status === "paid");
   const totals = {
@@ -42,13 +52,18 @@ export default async function AdminGiftsPage({
           </Link>
           <h1 className="mt-1 font-serif text-3xl">Presentes</h1>
         </div>
-        <Link
-          href="/presentes"
-          target="_blank"
-          className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:border-accent hover:text-accent"
-        >
-          Ver lista pública
-        </Link>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <ReconcileButton />
+            <Link
+              href="/presentes"
+              target="_blank"
+              className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:border-accent hover:text-accent"
+            >
+              Ver lista pública
+            </Link>
+          </div>
+        </div>
       </header>
 
       <section className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -58,20 +73,33 @@ export default async function AdminGiftsPage({
         <Stat label="Pendentes" value={String(totals.pending)} />
       </section>
 
+      {rejeitados > 0 && (
+        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {rejeitados} webhook(s) recusado(s) por assinatura. Pagamentos podem
+          ter entrado no Mercado Pago sem aparecer aqui — clique em{" "}
+          <strong>Conferir pagamentos</strong> e veja a aba Webhooks.
+        </p>
+      )}
+
       <nav className="mt-8 flex gap-1 border-b border-border">
-        <Tab href="/admin/presentes" active={!showContributions}>
+        <Tab href="/admin/presentes" active={view === "presentes"}>
           Presentes ({totals.gifts})
         </Tab>
         <Tab
           href="/admin/presentes?tab=contribuicoes"
-          active={showContributions}
+          active={view === "contribuicoes"}
         >
           Contribuições ({contributions.length})
         </Tab>
+        <Tab href="/admin/presentes?tab=webhooks" active={view === "webhooks"}>
+          Webhooks ({eventos.length})
+        </Tab>
       </nav>
 
-      {showContributions ? (
+      {view === "contribuicoes" ? (
         <ContributionList rows={contributions} />
+      ) : view === "webhooks" ? (
+        <EventList rows={eventos} />
       ) : (
         <>
           <div className="mt-6 space-y-3">
@@ -161,6 +189,72 @@ function GiftRow({
 
       <GiftEditForm gift={gift} />
     </article>
+  );
+}
+
+function EventList({
+  rows,
+}: {
+  rows: Array<{
+    id: string;
+    topic: string;
+    action: string | null;
+    signatureOk: boolean;
+    note: string | null;
+    resourceId: string | null;
+    receivedAt: Date;
+  }>;
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="mt-6 rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted">
+        Nenhum webhook recebido ainda. Se um pagamento já foi feito, a URL no
+        painel do Mercado Pago provavelmente não está apontando para cá.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="mt-6 space-y-2">
+      {rows.map((row) => (
+        <li
+          key={row.id}
+          className={`rounded-xl border px-4 py-3 ${
+            row.signatureOk
+              ? "border-border bg-card"
+              : "border-red-200 bg-red-50"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0 truncate font-mono text-xs">
+              {row.topic} · {row.action ?? "—"}
+            </p>
+            <span className="shrink-0 text-xs text-muted">
+              {row.receivedAt.toLocaleString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          {row.resourceId && (
+            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
+              {row.resourceId}
+            </p>
+          )}
+          {row.note && (
+            <p
+              className={`mt-1 text-xs leading-relaxed ${
+                row.signatureOk ? "text-muted" : "text-red-700"
+              }`}
+            >
+              {row.note}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

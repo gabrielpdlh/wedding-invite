@@ -258,16 +258,25 @@ export function resolvePayment(payment: MpPayment): ResolvedPayment {
 // --- Assinatura do webhook --------------------------------------------------
 
 /**
- * Valida o header `x-signature: ts=<epoch>,v1=<hex>`. O manifesto assinado é
- * `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`, onde `data.id` vem da QUERY
- * STRING da notificação, não do corpo — trocar os dois é o erro clássico aqui.
+ * Valida o header `x-signature: ts=<epoch>,v1=<hex>`.
+ *
+ * O manifesto documentado é `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`,
+ * mas a documentação é ambígua em dois pontos que só aparecem em produção: de
+ * onde vem o `data.id` (query string ou corpo) e se o id alfanumérico das orders
+ * (`ORD01…`) entra em minúsculas ou no original. A regra do minúsculo foi
+ * escrita na época em que só existiam ids numéricos de pagamento.
+ *
+ * Em vez de apostar numa leitura, testamos as combinações plausíveis e aceitamos
+ * a que bater, registrando qual foi. Isso NÃO enfraquece a verificação: toda
+ * variante é um HMAC com o mesmo segredo, e quem não o tem não forja nenhuma.
  */
 export function verifyWebhookSignature(params: {
-  dataId: string | null;
+  dataIdFromQuery: string | null;
+  dataIdFromBody: string | null;
   xSignature: string | null;
   xRequestId: string | null;
   toleranceSeconds?: number;
-}): { ok: boolean; reason?: string } {
+}): { ok: boolean; variant?: string; reason?: string; tried?: number } {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
   if (!secret)
     return { ok: false, reason: "MERCADOPAGO_WEBHOOK_SECRET ausente" };
@@ -291,22 +300,49 @@ export function verifyWebhookSignature(params: {
     return { ok: false, reason: `ts fora da tolerância (${Math.round(age)}s)` };
   }
 
-  // Partes ausentes saem do manifesto em vez de virar string vazia, e o id
-  // alfanumérico das orders (ORD01…) é comparado em minúsculas.
-  const manifest = [
-    params.dataId ? `id:${params.dataId.toLowerCase()};` : "",
-    params.xRequestId ? `request-id:${params.xRequestId};` : "",
-    `ts:${ts};`,
-  ].join("");
+  const ids: Array<[string, string | null]> = [];
+  const push = (rotulo: string, valor: string | null) => {
+    if (valor && !ids.some(([, v]) => v === valor)) ids.push([rotulo, valor]);
+  };
+  push("query", params.dataIdFromQuery);
+  push("query-min", params.dataIdFromQuery?.toLowerCase() ?? null);
+  push("body", params.dataIdFromBody);
+  push("body-min", params.dataIdFromBody?.toLowerCase() ?? null);
+  ids.push(["sem-id", null]);
 
+  let tried = 0;
+  for (const [rotuloId, id] of ids) {
+    for (const comRequestId of [true, false]) {
+      if (comRequestId && !params.xRequestId) continue;
+
+      const manifest =
+        (id ? `id:${id};` : "") +
+        (comRequestId ? `request-id:${params.xRequestId};` : "") +
+        `ts:${ts};`;
+
+      tried += 1;
+      if (matches(secret, manifest, v1)) {
+        return {
+          ok: true,
+          variant: `${rotuloId}${comRequestId ? "+req" : "-req"}`,
+          tried,
+        };
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    reason: `nenhuma das ${tried} variantes conferiu — provavelmente o segredo é de outro ambiente`,
+    tried,
+  };
+}
+
+function matches(secret: string, manifest: string, v1: string) {
   const expected = createHmac("sha256", secret).update(manifest).digest("hex");
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(v1, "utf8");
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return { ok: false, reason: "assinatura não confere" };
-  }
-
-  return { ok: true };
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // --- Formatos de resposta (só o que a gente lê) ------------------------------

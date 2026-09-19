@@ -29,28 +29,39 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  // `data.id` vem da QUERY STRING; usar o do corpo quebra a validação da
-  // assinatura, que é montada sobre o valor da URL.
   const queryDataId =
     url.searchParams.get("data.id") ?? url.searchParams.get("id");
 
   const body = await request.json().catch(() => null);
+  const bodyDataId = body?.data?.id ? String(body.data.id) : null;
   const topic = String(
     body?.type ?? url.searchParams.get("type") ?? "desconhecido",
   );
-  const resourceId = String(body?.data?.id ?? queryDataId ?? "");
+  const resourceId = String(bodyDataId ?? queryDataId ?? "");
   const action = body?.action ? String(body.action) : null;
 
   const base = { topic, resourceId: resourceId || null, action, payload: body };
 
   const signature = verifyWebhookSignature({
-    dataId: queryDataId,
+    dataIdFromQuery: queryDataId,
+    dataIdFromBody: bodyDataId,
     xSignature: request.headers.get("x-signature"),
     xRequestId: request.headers.get("x-request-id"),
   });
 
   if (!signature.ok) {
-    await log({ ...base, signatureOk: false, note: signature.reason });
+    // Guardamos o formato da requisição junto do motivo: sem isso, diagnosticar
+    // uma rejeição vira adivinhação sobre o que o Mercado Pago mandou.
+    await log({
+      ...base,
+      signatureOk: false,
+      note: [
+        signature.reason,
+        `query="${url.search || "(vazia)"}"`,
+        `x-request-id=${request.headers.get("x-request-id") ? "presente" : "AUSENTE"}`,
+        `body.data.id=${bodyDataId ?? "ausente"}`,
+      ].join(" | "),
+    });
     return new Response("assinatura inválida", { status: 401 });
   }
 
@@ -178,7 +189,7 @@ export async function POST(request: Request) {
       ...base,
       signatureOk: true,
       contributionId: contribution.id,
-      note: notes.join(" · "),
+      note: `[assinatura: ${signature.variant}] ${notes.join(" · ")}`,
     });
 
     return ok();

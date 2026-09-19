@@ -5,7 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { gifts } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
-import { parseAmountToCents } from "@/lib/money";
+import { formatBRL, parseAmountToCents } from "@/lib/money";
+import { reconcilePendingContributions } from "@/lib/reconcile";
 
 export type GiftFormState = { error?: string; created?: string };
 
@@ -144,4 +145,52 @@ export async function updateGift(
 
   revalidatePath("/admin/presentes");
   return { created: name };
+}
+
+export type ReconcileState = { summary?: string; error?: string };
+
+/**
+ * Pergunta ao Mercado Pago o status real de tudo que ficou pendente e acerta o
+ * banco. Existe como botão do painel (e não só como script) porque o token de
+ * produção vive nas variáveis da Vercel — daqui a consulta roda com ele, sem o
+ * token precisar sair de lá.
+ */
+export async function reconcileNow(
+  _prev: ReconcileState,
+  _formData: FormData,
+): Promise<ReconcileState> {
+  await requireAdmin();
+
+  try {
+    const linhas = await reconcilePendingContributions();
+
+    if (linhas.length === 0) {
+      revalidatePath("/admin/presentes");
+      return { summary: "Nada pendente — está tudo em dia." };
+    }
+
+    const creditadas = linhas.filter((l) => l.outcome === "creditada");
+    const erros = linhas.filter((l) => l.outcome === "erro");
+    const total = creditadas.reduce((soma, l) => soma + l.amountCents, 0);
+
+    const partes = [
+      creditadas.length > 0
+        ? `${creditadas.length} creditada(s), ${formatBRL(total)}`
+        : "nenhuma nova confirmação",
+      `${linhas.length} pendente(s) conferida(s)`,
+    ];
+    if (erros.length > 0)
+      partes.push(`${erros.length} com erro: ${erros[0].detail}`);
+
+    revalidatePath("/admin/presentes");
+    return { summary: partes.join(" · ") };
+  } catch (error) {
+    console.error("[admin] reconciliação falhou:", error);
+    return {
+      error:
+        error instanceof Error
+          ? error.message.slice(0, 200)
+          : "Falha ao consultar o Mercado Pago.",
+    };
+  }
 }
