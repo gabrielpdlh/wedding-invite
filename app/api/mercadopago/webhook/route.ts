@@ -8,6 +8,7 @@ import {
   resolveOrder,
   resolvePayment,
   verifyWebhookSignature,
+  MercadoPagoApiError,
   type ResolvedPayment,
 } from "@/lib/mercadopago";
 import { sendGiftNotification } from "@/lib/email";
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
       note: [
         signature.reason,
         `query="${url.search || "(vazia)"}"`,
-        `x-request-id=${request.headers.get("x-request-id") ? "presente" : "AUSENTE"}`,
+        `x-request-id=${request.headers.get("x-request-id") ?? "AUSENTE"}`,
+        `x-signature=${request.headers.get("x-signature") ?? "AUSENTE"}`,
         `body.data.id=${bodyDataId ?? "ausente"}`,
       ].join(" | "),
     });
@@ -194,6 +196,19 @@ export async function POST(request: Request) {
 
     return ok();
   } catch (error) {
+    // 4xx sobre o recurso = a notificação nunca vai ser processável. É o caso
+    // da "Simular notificação" do painel, que manda `data.id: "123456"` e leva
+    // um 400 `invalid_path_param`. Devolver 500 faria o Mercado Pago retentar
+    // de 15 em 15 minutos, para sempre, algo que jamais vai resolver.
+    if (error instanceof MercadoPagoApiError && error.isPermanent) {
+      await log({
+        ...base,
+        signatureOk: true,
+        note: `assinatura OK ✓ — mas o recurso ${resourceId} não é consultável (HTTP ${error.status}). Simulação do painel, ou credencial de outro ambiente.`,
+      });
+      return ok();
+    }
+
     console.error("[webhook] falha ao processar notificação:", error);
     await log({
       ...base,

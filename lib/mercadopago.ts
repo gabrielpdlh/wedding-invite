@@ -4,6 +4,29 @@ import { amountToCents, centsToAmountString } from "./money";
 
 const API = "https://api.mercadopago.com";
 
+export class MercadoPagoApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "MercadoPagoApiError";
+  }
+
+  /**
+   * A requisição está errada ou o recurso não existe — reprocessar não muda o
+   * resultado. 404 é a order de outra conta; 400 `invalid_path_param` é o id
+   * falso que a "Simular notificação" do painel manda.
+   *
+   * 401/403 (credencial errada) e 429 ficam de fora de propósito: esses podem
+   * passar a funcionar depois que alguém conserta o ambiente, então vale deixar
+   * o Mercado Pago retentar.
+   */
+  get isPermanent() {
+    return this.status === 400 || this.status === 404 || this.status === 422;
+  }
+}
+
 /**
  * Cliente do Mercado Pago em `fetch` puro. São quatro chamadas — o SDK oficial só
  * acrescentaria uma dependência que muda de versão sozinha.
@@ -55,9 +78,11 @@ async function mpFetch<T>(
 
   const text = await response.text();
   if (!response.ok) {
-    // O corpo do erro traz `message` e `cause` — sem ele o debug vira adivinhação.
-    throw new Error(
-      `Mercado Pago ${rest.method ?? "GET"} ${path} respondeu ${response.status}: ${text.slice(0, 500)}`,
+    // O status vem junto do erro porque quem chama precisa distinguir "falhou
+    // agora, tente de novo" de "isso não existe e nunca vai existir".
+    throw new MercadoPagoApiError(
+      `Mercado Pago ${rest.method ?? "GET"} ${path} respondeu ${response.status}: ${text.slice(0, 300)}`,
+      response.status,
     );
   }
 
@@ -277,7 +302,10 @@ export function verifyWebhookSignature(params: {
   xRequestId: string | null;
   toleranceSeconds?: number;
 }): { ok: boolean; variant?: string; reason?: string; tried?: number } {
-  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  // `.trim()` não é paranoia: copiar o segredo do painel arrasta espaço ou
+  // quebra de linha com frequência, e no painel da Vercel isso fica invisível.
+  // Um único byte a mais muda o HMAC inteiro.
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim();
   if (!secret)
     return { ok: false, reason: "MERCADOPAGO_WEBHOOK_SECRET ausente" };
   if (!params.xSignature)
@@ -331,9 +359,19 @@ export function verifyWebhookSignature(params: {
     }
   }
 
+  // O tamanho (nunca o valor) entra no log: o segredo do painel tem 64 caracteres
+  // hex, então qualquer outro número aponta o erro na hora — 65 é espaço colado
+  // junto, 0 é variável vazia, outro valor é segredo de outro lugar.
+  const bruto = process.env.MERCADOPAGO_WEBHOOK_SECRET ?? "";
+  const sobra = bruto.length - secret.length;
+  const formato =
+    secret.length === 64 && /^[0-9a-f]+$/i.test(secret)
+      ? "formato ok (64 hex) — provavelmente é de outro ambiente"
+      : `FORMATO SUSPEITO: ${secret.length} chars${sobra > 0 ? `, ${sobra} de espaço/quebra removidos` : ""}`;
+
   return {
     ok: false,
-    reason: `nenhuma das ${tried} variantes conferiu — provavelmente o segredo é de outro ambiente`,
+    reason: `nenhuma das ${tried} variantes conferiu | segredo: ${formato}`,
     tried,
   };
 }

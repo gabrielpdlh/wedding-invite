@@ -4,6 +4,7 @@ import { contributions, paymentEvents } from "@/db/schema";
 import {
   getOrder,
   getPayment,
+  MercadoPagoApiError,
   resolveOrder,
   resolvePayment,
 } from "./mercadopago";
@@ -119,12 +120,33 @@ export async function reconcilePendingContributions(): Promise<ReconcileRow[]> {
         });
       }
     } catch (error) {
-      resultados.push({
-        ...base,
-        outcome: "erro",
-        detail:
-          error instanceof Error ? error.message.slice(0, 160) : String(error),
-      });
+      const msg = error instanceof Error ? error.message : String(error);
+
+      // 4xx = a order não existe para este token. Acontece com cobrança criada
+      // no sandbox e consultada com credencial de produção. Ela nunca vai ser
+      // paga, então encerra em vez de reaparecer como erro em toda conferida.
+      if (error instanceof MercadoPagoApiError && error.isPermanent) {
+        await db
+          .update(contributions)
+          .set({
+            status: "expired",
+            providerStatus: "order inexistente (outro ambiente)",
+          })
+          .where(
+            and(
+              eq(contributions.id, c.id),
+              eq(contributions.status, "pending"),
+            ),
+          );
+        resultados.push({
+          ...base,
+          outcome: "pendente",
+          detail: "cobrança de outro ambiente — encerrada",
+        });
+        continue;
+      }
+
+      resultados.push({ ...base, outcome: "erro", detail: msg.slice(0, 160) });
     }
   }
 
