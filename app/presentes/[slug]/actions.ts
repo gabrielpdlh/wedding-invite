@@ -10,7 +10,17 @@ import { formatBRL, parseAmountToCents } from "@/lib/money";
 
 export type ContributeState = { error?: string };
 
-const MIN_CENTS = 2_000; // R$ 20
+/**
+ * Mínimo por contribuição. O padrão de R$ 20 vive aqui, no código, e
+ * `CONTRIBUTION_MIN_CENTS` só existe para baixá-lo temporariamente durante um
+ * teste em produção (ex.: `100` para um Pix de R$ 1).
+ *
+ * A direção importa: apagar a variável devolve o valor seguro sozinho. O que dá
+ * errado é ESQUECER dela setada — aí o site fica aceitando doação de R$ 1 para
+ * sempre. `||`, não `??`, porque no painel da Vercel a variável pode existir
+ * vazia (mesma armadilha do NEXT_PUBLIC_APP_URL em lib/mercadopago.ts).
+ */
+const MIN_CENTS = Number(process.env.CONTRIBUTION_MIN_CENTS) || 2_000;
 const MAX_CENTS = 2_000_000; // R$ 20.000
 const MAX_SHARES = 50;
 
