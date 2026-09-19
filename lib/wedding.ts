@@ -1,5 +1,6 @@
 /** Dados do evento — edite aqui e o convite inteiro acompanha. */
 export const WEDDING = {
+  couple: "Gabriel & Letícia",
   date: "14 de novembro de 2026",
   time: "a partir das 15h",
   venue: "Chácara La Vie",

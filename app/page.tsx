@@ -1,29 +1,10 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
+/**
+ * A lista de presentes virou a porta de entrada do site. O convite continua
+ * vivendo em `/convite/[token]`, com link próprio, e o painel em `/admin` —
+ * nenhum dos dois passa por aqui.
+ */
 export default function Home() {
-  return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-5 py-12 text-center">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted">
-        Nosso casamento
-      </p>
-      <h1 className="mt-4 font-serif text-4xl">Em breve</h1>
-      <p className="mt-3 text-sm leading-relaxed text-muted">
-        Se você recebeu um convite, use o link pessoal que enviamos para
-        confirmar sua presença.
-      </p>
-      <Link
-        href="/presentes"
-        className="mx-auto mt-8 inline-block rounded-xl bg-accent-deep px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
-      >
-        Lista de presentes
-      </Link>
-
-      <Link
-        href="/admin"
-        className="mt-6 text-xs text-muted underline underline-offset-4 hover:text-accent"
-      >
-        Área dos noivos
-      </Link>
-    </main>
-  );
+  redirect("/presentes");
 }

@@ -8,6 +8,7 @@ import {
   remainingCents,
 } from "@/lib/gifts";
 import { ProgressBar, ProgressLabel } from "../progress";
+import { Photo, PhotoPlaceholder } from "../photo";
 import { ContributeForm } from "./contribute-form";
 
 export const dynamic = "force-dynamic";
@@ -51,15 +52,18 @@ export default async function GiftPage({
       </Link>
 
       <article className="mt-5 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-        {gift.imageUrl && (
-          // Mesma razão da lista, em app/presentes/page.tsx.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={gift.imageUrl}
-            alt=""
-            className="h-52 w-full object-cover"
-          />
-        )}
+        <div className="relative aspect-[4/3] w-full sm:aspect-[16/9]">
+          {gift.imageUrl ? (
+            <Photo
+              src={gift.imageUrl}
+              alt={gift.name}
+              sizes="(max-width: 640px) 100vw, 512px"
+              priority
+            />
+          ) : (
+            <PhotoPlaceholder />
+          )}
+        </div>
 
         <div className="space-y-5 p-6 sm:p-8">
           <header>
