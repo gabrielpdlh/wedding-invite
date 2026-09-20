@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { and, eq, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { guests, invites } from "@/db/schema";
@@ -77,5 +78,10 @@ export async function confirmRsvp(
 
   revalidatePath(`/convite/${token}`);
   revalidatePath("/admin");
-  return {};
+
+  // Sai por redirect em vez de `return {}`: o `?obrigado=1` é o gatilho do modal
+  // de agradecimento. `redirect` lança exceção de controle, então precisa ficar
+  // fora de qualquer try/catch — aqui não há nenhum, e a revalidação vem antes
+  // porque nada depois dela roda.
+  redirect(`/convite/${token}?obrigado=1`);
 }

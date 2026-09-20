@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Alianças">
+  <!-- Alianças entrelaçadas. Traço grosso e só duas formas de propósito: o
+       favicon é visto a 16px, onde qualquer detalhe fino vira borrão. -->
+  <rect width="64" height="64" rx="14" fill="#b0521a"/>
+  <g fill="none" stroke="#ffffff" stroke-width="6">
+    <circle cx="25" cy="37" r="13"/>
+    <circle cx="39" cy="37" r="13"/>
+  </g>
+  <path d="M32 16.5 34.6 22 40.5 22.9 36.2 27 37.3 33 32 30.1 26.7 33 27.8 27 23.5 22.9 29.4 22Z" fill="#ffd9a8"/>
+</svg>

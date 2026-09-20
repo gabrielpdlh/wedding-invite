@@ -3,13 +3,17 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { WEDDING } from "@/lib/wedding";
 import { RsvpForm } from "./rsvp-form";
+import { ThankYouModal } from "./thank-you-modal";
 
 export default async function InvitePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ obrigado?: string }>;
 }) {
   const { token } = await params;
+  const { obrigado } = await searchParams;
 
   const invite = await db.query.invites.findFirst({
     where: { token },
@@ -28,6 +32,10 @@ export default async function InvitePage({
 
   return (
     <>
+      {responded && obrigado === "1" && (
+        <ThankYouModal going={going.map((guest) => guest.name)} token={token} />
+      )}
+
       {/* next/image (not a CSS background) so the 7.5MB original gets resized
           and served as WebP — most guests open this on mobile data. */}
       <div className="fixed inset-0 -z-10">
