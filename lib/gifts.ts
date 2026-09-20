@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contributions, gifts } from "@/db/schema";
 
@@ -69,22 +69,6 @@ export async function getGiftWithProgress(
     .limit(1);
 
   return row ?? null;
-}
-
-/** Quem já contribuiu, para o mural de agradecimento. Só confirmados. */
-export async function listSupporters(giftId: string) {
-  return db
-    .select({
-      id: contributions.id,
-      donorName: contributions.donorName,
-      message: contributions.message,
-      paidAt: contributions.paidAt,
-    })
-    .from(contributions)
-    .where(
-      and(eq(contributions.giftId, giftId), eq(contributions.status, "paid")),
-    )
-    .orderBy(desc(contributions.paidAt));
 }
 
 export function remainingCents(gift: {

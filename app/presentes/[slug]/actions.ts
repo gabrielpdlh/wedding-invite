@@ -7,22 +7,13 @@ import { contributions, type ContributionMethod } from "@/db/schema";
 import { getGiftWithProgress, isFunded } from "@/lib/gifts";
 import { createCardPreference, createPixCharge } from "@/lib/mercadopago";
 import { formatBRL, parseAmountToCents } from "@/lib/money";
+import {
+  MAX_CONTRIBUTION_CENTS,
+  MAX_SHARES,
+  MIN_CONTRIBUTION_CENTS,
+} from "@/lib/contribution";
 
 export type ContributeState = { error?: string };
-
-/**
- * Mínimo por contribuição. O padrão de R$ 20 vive aqui, no código, e
- * `CONTRIBUTION_MIN_CENTS` só existe para baixá-lo temporariamente durante um
- * teste em produção (ex.: `100` para um Pix de R$ 1).
- *
- * A direção importa: apagar a variável devolve o valor seguro sozinho. O que dá
- * errado é ESQUECER dela setada — aí o site fica aceitando doação de R$ 1 para
- * sempre. `||`, não `??`, porque no painel da Vercel a variável pode existir
- * vazia (mesma armadilha do NEXT_PUBLIC_APP_URL em lib/mercadopago.ts).
- */
-const MIN_CENTS = Number(process.env.CONTRIBUTION_MIN_CENTS) || 2_000;
-const MAX_CENTS = 2_000_000; // R$ 20.000
-const MAX_SHARES = 50;
 
 export async function startContribution(
   _prev: ContributeState,
@@ -52,12 +43,12 @@ export async function startContribution(
   // banco, e o valor livre é revalidado contra os limites aqui.
   const amountCents = resolveAmountCents(formData, gift.shareCents);
   if (!amountCents) return { error: "Informe um valor válido." };
-  if (amountCents < MIN_CENTS) {
-    return { error: `O valor mínimo é ${formatBRL(MIN_CENTS)}.` };
+  if (amountCents < MIN_CONTRIBUTION_CENTS) {
+    return { error: `O valor mínimo é ${formatBRL(MIN_CONTRIBUTION_CENTS)}.` };
   }
-  if (amountCents > MAX_CENTS) {
+  if (amountCents > MAX_CONTRIBUTION_CENTS) {
     return {
-      error: `Para valores acima de ${formatBRL(MAX_CENTS)}, fale direto com os noivos.`,
+      error: `Para valores acima de ${formatBRL(MAX_CONTRIBUTION_CENTS)}, fale direto com os noivos.`,
     };
   }
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { listGiftsWithProgress, isFunded } from "@/lib/gifts";
 import { formatBRL } from "@/lib/money";
+import { MIN_CONTRIBUTION_CENTS } from "@/lib/contribution";
 import { WEDDING } from "@/lib/wedding";
 import { ProgressBar, ProgressLabel } from "./progress";
 import { Photo, PhotoPlaceholder } from "./photo";
@@ -205,7 +206,7 @@ function GiftCard({
         >
           {funded
             ? `${gift.supporters} ${gift.supporters === 1 ? "pessoa contribuiu" : "pessoas contribuíram"}`
-            : `Contribuir a partir de ${formatBRL(gift.shareCents)} →`}
+            : `Contribuir a partir de ${formatBRL(MIN_CONTRIBUTION_CENTS)} →`}
         </span>
       </div>
     </Link>

@@ -18,19 +18,17 @@ import { formatBRL } from "@/lib/money";
  * com a rota `/presentes/[slug]`, que trataria "sofa.jpg" como slug de presente.
  */
 const LISTA = [
-  // Ordem pensada para a página: quem tem foto aparece primeiro, para a lista
-  // abrir bonita. Os sem foto ficam no fim até alguém fotografar.
   {
     slug: "armario-de-cozinha",
     name: "Armário de cozinha",
-    targetCents: 600_000,
+    targetCents: 400_000,
     shareCents: 10_000,
     imageUrl: "/cozinha.jpeg",
   },
   {
     slug: "guarda-roupas",
     name: "Guarda-roupas",
-    targetCents: 400_000,
+    targetCents: 200_000,
     shareCents: 10_000,
     imageUrl: "/guarda-roupas-quarto.jpeg",
   },
@@ -42,40 +40,40 @@ const LISTA = [
     imageUrl: "/sofa-dois-lugares.jpeg",
   },
   {
-    slug: "painel-de-tv",
-    name: "Painel de TV",
-    targetCents: 80_000,
-    shareCents: 10_000,
-    imageUrl: "/painel-tv.jpeg",
-  },
-  // Cota menor: R$ 100 num presente de R$ 500 deixaria só 5 cotas.
-  {
-    slug: "armario-do-banheiro",
-    name: "Armário do banheiro",
-    targetCents: 50_000,
-    shareCents: 5_000,
-    imageUrl: "/armario-do-banheiro.jpeg",
-  },
-  {
     slug: "tv-55",
     name: "TV 55”",
     targetCents: 230_000,
     shareCents: 10_000,
-    imageUrl: null,
-  },
-  {
-    slug: "mesa-de-jantar-4-lugares",
-    name: "Mesa de jantar 4 lugares",
-    targetCents: 140_000,
-    shareCents: 10_000,
-    imageUrl: null,
+    imageUrl: "/tv.png",
   },
   {
     slug: "ar-condicionado",
     name: "Ar-condicionado",
     targetCents: 180_000,
     shareCents: 10_000,
-    imageUrl: null,
+    imageUrl: "/ar-condicionado.avif",
+  },
+  {
+    slug: "mesa-de-jantar-4-lugares",
+    name: "Mesa de jantar 4 lugares",
+    targetCents: 140_000,
+    shareCents: 10_000,
+    imageUrl: "/mesa-4-lugares.jpeg",
+  },
+  {
+    slug: "painel-de-tv",
+    name: "Painel de TV",
+    targetCents: 80_000,
+    shareCents: 10_000,
+    imageUrl: "/painel-tv.jpeg",
+  },
+  {
+    // Cota menor: R$ 100 num presente de R$ 500 deixaria só 5 cotas.
+    slug: "armario-do-banheiro",
+    name: "Armário do banheiro",
+    targetCents: 50_000,
+    shareCents: 5_000,
+    imageUrl: "/armario-do-banheiro.jpeg",
   },
 ];
 

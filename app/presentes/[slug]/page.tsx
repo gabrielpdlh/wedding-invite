@@ -1,12 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  getGiftWithProgress,
-  isFunded,
-  listSupporters,
-  remainingCents,
-} from "@/lib/gifts";
+import { getGiftWithProgress, isFunded, remainingCents } from "@/lib/gifts";
 import { ProgressBar, ProgressLabel } from "../progress";
 import { Photo, PhotoPlaceholder } from "../photo";
 import { ContributeForm } from "./contribute-form";
@@ -39,7 +34,6 @@ export default async function GiftPage({
   const gift = await getGiftWithProgress(slug);
   if (!gift || !gift.active) notFound();
 
-  const supporters = await listSupporters(gift.id);
   const funded = isFunded(gift);
 
   return (
@@ -78,10 +72,10 @@ export default async function GiftPage({
           <div className="space-y-2">
             <ProgressBar gift={gift} />
             <ProgressLabel gift={gift} />
-            {supporters.length > 0 && (
+            {gift.supporters > 0 && (
               <p className="text-xs text-muted">
-                {supporters.length}{" "}
-                {supporters.length === 1
+                {gift.supporters}{" "}
+                {gift.supporters === 1
                   ? "pessoa já contribuiu"
                   : "pessoas já contribuíram"}
               </p>
@@ -113,29 +107,6 @@ export default async function GiftPage({
           )}
         </div>
       </article>
-
-      {supporters.length > 0 && (
-        <section className="mt-8">
-          <h2 className="font-serif text-2xl">Quem já ajudou</h2>
-          <ul className="mt-4 space-y-2">
-            {supporters.map((supporter) => (
-              <li
-                key={supporter.id}
-                className="rounded-xl border border-border bg-card px-4 py-3"
-              >
-                <p className="text-[15px] font-medium">{supporter.donorName}</p>
-                {supporter.message && (
-                  <p className="mt-1 text-sm leading-relaxed text-muted">
-                    “{supporter.message}”
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-          {/* Valores individuais ficam de fora de propósito: quem deu uma cota
-              não precisa aparecer ao lado de quem deu dez. */}
-        </section>
-      )}
     </main>
   );
 }

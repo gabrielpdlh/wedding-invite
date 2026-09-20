@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { startContribution, type ContributeState } from "./actions";
 import { formatBRL, parseAmountToCents } from "@/lib/money";
+import { MIN_CONTRIBUTION_CENTS } from "@/lib/contribution";
 
 export function ContributeForm({
   slug,
@@ -65,7 +66,7 @@ export function ContributeForm({
 
         <div className="space-y-1.5">
           <label htmlFor="customAmount" className="text-sm text-muted">
-            ou outro valor
+            ou outro valor (mínimo {formatBRL(MIN_CONTRIBUTION_CENTS)})
           </label>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 focus-within:border-accent">
             <span className="text-muted">R$</span>
