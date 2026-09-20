@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { requireAdmin } from "@/lib/session";
 import { listGiftsWithProgress, isFunded } from "@/lib/gifts";
 import { formatBRL } from "@/lib/money";
 import { ProgressBar } from "@/app/presentes/progress";
-import type { ContributionStatus } from "@/db/schema";
+import { paymentEvents, type ContributionStatus } from "@/db/schema";
 import { GiftForm } from "./gift-form";
 import { GiftEditForm } from "./edit-form";
 import { ReconcileButton } from "./reconcile-button";
@@ -33,7 +34,23 @@ export default async function AdminGiftsPage({
     orderBy: { receivedAt: "desc" },
     limit: 50,
   });
-  const rejeitados = eventos.filter((e) => !e.signatureOk).length;
+  // Só as recentes acendem o alerta: contar o histórico inteiro manteria o aviso
+  // vermelho aceso para sempre por causa de um problema já resolvido, e alarme
+  // que nunca apaga é alarme que ninguém lê. O histórico completo continua na
+  // aba Webhooks.
+  //
+  // A janela é calculada no Postgres, não em JS: `Date.now()` durante o render é
+  // função impura (o React reclama, com razão), e assim o corte usa o relógio do
+  // banco — o mesmo que gravou as linhas.
+  const [{ rejeitados }] = await db
+    .select({ rejeitados: sql<number>`count(*)::int` })
+    .from(paymentEvents)
+    .where(
+      and(
+        eq(paymentEvents.signatureOk, false),
+        sql`${paymentEvents.receivedAt} > now() - interval '24 hours'`,
+      ),
+    );
 
   const paid = contributions.filter((row) => row.status === "paid");
   const totals = {
@@ -75,9 +92,9 @@ export default async function AdminGiftsPage({
 
       {rejeitados > 0 && (
         <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {rejeitados} webhook(s) recusado(s) por assinatura. Pagamentos podem
-          ter entrado no Mercado Pago sem aparecer aqui — clique em{" "}
-          <strong>Conferir pagamentos</strong> e veja a aba Webhooks.
+          {rejeitados} webhook(s) recusado(s) por assinatura nas últimas 24h.
+          Pagamentos podem ter entrado no Mercado Pago sem aparecer aqui —
+          clique em <strong>Conferir pagamentos</strong> e veja a aba Webhooks.
         </p>
       )}
 
